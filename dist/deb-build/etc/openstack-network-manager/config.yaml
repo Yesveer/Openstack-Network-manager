@@ -1,0 +1,47 @@
+# openstack-network-manager configuration
+# Manages network interfaces hot-plugged into OpenStack virtual machines.
+
+# backend: how DHCP is configured for new interfaces.
+#   networkd  - writes systemd-networkd .network files (default, recommended for Ubuntu 22.04+)
+#   dhclient  - invokes dhclient directly (fallback for older setups)
+backend: networkd
+
+# include_prefixes: interface name prefixes to manage.
+# Only interfaces whose names start with one of these prefixes are touched.
+include_prefixes:
+  - eth
+  - ens
+  - enp
+  - eno
+  - em
+
+# exclude_prefixes: interface name prefixes to always ignore.
+# Takes priority over include_prefixes.
+exclude_prefixes:
+  - lo
+  - docker
+  - br-
+  - veth
+  - cali
+  - virbr
+  - tun
+  - tap
+  - dummy
+  - flannel
+  - weave
+
+# dhcp_timeout: seconds to wait for a DHCP lease (dhclient backend only)
+dhcp_timeout: 60
+
+# max_retries: number of DHCP attempts before giving up on an interface
+max_retries: 5
+
+# retry_delay: seconds between consecutive DHCP retry attempts
+retry_delay: 5
+
+# carrier_timeout: seconds to wait for link-layer carrier before starting DHCP.
+# Increase if your hypervisor is slow to attach the virtual cable.
+carrier_timeout: 30
+
+# networkd_dir: directory for systemd-networkd runtime .network files (networkd backend only)
+networkd_dir: /run/systemd/network

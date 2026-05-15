@@ -1,0 +1,24 @@
+[Unit]
+Description=OpenStack Network Hot-plug Manager
+Documentation=https://github.com/yesveer/openstack-network-manager
+After=network.target systemd-networkd.service
+Wants=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/openstack-network-manager
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=10s
+TimeoutStopSec=15s
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openstack-network-manager
+
+# Runs as root — required for netlink socket, networkctl, and dhclient
+User=root
+
+[Install]
+WantedBy=multi-user.target

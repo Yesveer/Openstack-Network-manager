@@ -1,0 +1,20 @@
+Package: openstack-network-manager
+Version: 1.0.0
+Section: net
+Priority: optional
+Architecture: amd64
+Depends: systemd, iproute2
+Recommends: isc-dhcp-client
+Maintainer: Coredge Team <yesveer@coredge.io>
+Description: OpenStack Network Hot-plug Manager for Ubuntu
+ Automatically detects and configures network interfaces that are
+ hot-plugged into OpenStack virtual machines after initial boot.
+ .
+ When OpenStack attaches a new network to a running VM, the kernel
+ creates a new interface but Ubuntu does not configure it by default.
+ This daemon monitors netlink events and runs DHCP on every new
+ interface as soon as it appears — no reboot required.
+ .
+ Supports systemd-networkd (default) and dhclient backends.
+ Installs as a systemd service that starts automatically on boot.
+Installed-Size: 3380

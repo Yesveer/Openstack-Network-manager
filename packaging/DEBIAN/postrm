@@ -1,0 +1,28 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+    remove)
+        if systemctl is-enabled --quiet openstack-network-manager.service 2>/dev/null; then
+            systemctl disable openstack-network-manager.service || true
+        fi
+        systemctl daemon-reload
+        ;;
+    purge)
+        if systemctl is-enabled --quiet openstack-network-manager.service 2>/dev/null; then
+            systemctl disable openstack-network-manager.service || true
+        fi
+        rm -rf /etc/openstack-network-manager
+        rm -f /run/systemd/network/99-openstack-network-manager-*.network
+        rm -f /run/openstack-network-manager-dhclient-*.pid
+        systemctl daemon-reload
+        ;;
+    upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+        ;;
+    *)
+        echo "postrm called with unknown argument '$1'" >&2
+        exit 1
+        ;;
+esac
+
+exit 0
