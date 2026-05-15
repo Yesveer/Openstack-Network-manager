@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"os/exec"
 	"strconv"
@@ -115,6 +116,11 @@ func (m *Manager) ConfigureInterface(ctx context.Context, name string) {
 
 		if lastErr == nil {
 			log.Info("interface configured successfully")
+			go func() {
+				if err := m.waitAndSetupPolicyRouting(ctx, name); err != nil {
+					log.Warn("policy routing setup failed", "error", err)
+				}
+			}()
 			return
 		}
 
@@ -132,10 +138,31 @@ func (m *Manager) ConfigureInterface(ctx context.Context, name string) {
 	log.Error("failed to configure interface after all attempts", "error", lastErr)
 }
 
+// IsManagedByUs returns true if this app previously configured the interface
+// (i.e., a tracking file from a prior ConfigureInterface call exists).
+func (m *Manager) IsManagedByUs(name string) bool {
+	switch m.cfg.Backend {
+	case config.BackendNetworkd:
+		return m.isNetworkdManaged(name)
+	default:
+		_, err := os.Stat(m.dhclientLeaseFile(name))
+		return err == nil
+	}
+}
+
 // ReleaseInterface releases the DHCP lease and removes configuration for an interface.
+// It only acts on interfaces that were configured by this app; others are ignored.
 func (m *Manager) ReleaseInterface(ctx context.Context, name string) {
 	log := m.logger.With("interface", name)
+
+	if !m.IsManagedByUs(name) {
+		log.Debug("interface was not configured by us, skipping release")
+		return
+	}
+
 	log.Info("interface removed, releasing DHCP")
+
+	m.teardownPolicyRouting(name)
 
 	switch m.cfg.Backend {
 	case config.BackendNetworkd:
@@ -145,7 +172,9 @@ func (m *Manager) ReleaseInterface(ctx context.Context, name string) {
 	}
 }
 
-// ConfigureExisting configures any manageable interfaces that don't have an IP at startup.
+// ConfigureExisting recovers interfaces this app previously configured that lost
+// their IP (e.g. after a daemon restart). Interfaces not tracked by a prior run
+// are skipped so manually-configured or third-party interfaces are never touched.
 func (m *Manager) ConfigureExisting(ctx context.Context) {
 	links, err := netlink.LinkList()
 	if err != nil {
@@ -158,11 +187,17 @@ func (m *Manager) ConfigureExisting(ctx context.Context) {
 		if !m.ShouldManage(name) {
 			continue
 		}
-		if m.HasIP(name) {
-			m.logger.Debug("interface already configured", "interface", name)
+		if !m.IsManagedByUs(name) {
+			m.logger.Debug("interface has no tracking file, skipping on startup", "interface", name)
 			continue
 		}
-		m.logger.Info("found unconfigured interface at startup", "interface", name)
+		if m.HasIP(name) {
+			// Interface already has IP — restore policy routing in case daemon restarted.
+			m.logger.Info("restoring policy routing for managed interface", "interface", name)
+			go m.waitAndSetupPolicyRouting(ctx, name)
+			continue
+		}
+		m.logger.Info("found previously-managed unconfigured interface at startup", "interface", name)
 		go m.ConfigureInterface(ctx, name)
 	}
 }
@@ -346,4 +381,125 @@ func (m *Manager) waitForCarrier(ctx context.Context, name string) error {
 	}
 
 	return fmt.Errorf("carrier timeout after %ds for %s", m.cfg.CarrierTimeout, name)
+}
+
+// waitAndSetupPolicyRouting waits until the interface has an IP (up to 30s)
+// then calls setupPolicyRouting. Used for networkd where IP is assigned async.
+func (m *Manager) waitAndSetupPolicyRouting(ctx context.Context, name string) error {
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if m.HasIP(name) {
+			return m.setupPolicyRouting(name)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	return fmt.Errorf("timeout waiting for IP on %s for policy routing", name)
+}
+
+// --- policy routing ---
+
+// policyTableID returns a stable routing table ID (200–399) derived from the
+// interface name so that each interface gets its own table across restarts.
+func policyTableID(name string) int {
+	var h uint32 = 2166136261 // FNV-1a basis
+	for _, b := range []byte(name) {
+		h ^= uint32(b)
+		h *= 16777619
+	}
+	return int(200 + h%200)
+}
+
+// setupPolicyRouting adds a per-source routing rule so that packets sent FROM
+// this interface's IP always leave via the same interface. This prevents the
+// asymmetric-routing problem where nginx (or any service) replies go out the
+// wrong gateway when multiple default routes exist.
+func (m *Manager) setupPolicyRouting(name string) error {
+	link, err := netlink.LinkByName(name)
+	if err != nil {
+		return fmt.Errorf("link lookup: %w", err)
+	}
+
+	addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+	if err != nil {
+		return fmt.Errorf("addr list: %w", err)
+	}
+
+	var srcIP net.IP
+	for _, addr := range addrs {
+		if addr.IP != nil && !addr.IP.IsLinkLocalUnicast() {
+			srcIP = addr.IP.To4()
+			break
+		}
+	}
+	if srcIP == nil {
+		return fmt.Errorf("no IPv4 address on %s", name)
+	}
+
+	tableID := policyTableID(name)
+
+	// Copy only the connected subnet route and the default route into the policy
+	// table. These two are sufficient: subnet route handles local traffic, default
+	// handles replies to clients outside the subnet. Other DHCP-injected host
+	// routes (8.8.8.8, 169.254.169.254, etc.) are not needed here.
+	routes, err := netlink.RouteListFiltered(netlink.FAMILY_V4,
+		&netlink.Route{LinkIndex: link.Attrs().Index}, netlink.RT_FILTER_OIF)
+	if err != nil {
+		return fmt.Errorf("route list: %w", err)
+	}
+	for _, r := range routes {
+		isDefault := r.Dst == nil || r.Dst.String() == "0.0.0.0/0"
+		isConnected := r.Dst != nil && r.Gw == nil
+		if !isDefault && !isConnected {
+			continue
+		}
+		nr := r
+		nr.Table = tableID
+		if addErr := netlink.RouteAdd(&nr); addErr != nil && addErr != syscall.EEXIST {
+			m.logger.Debug("policy route add skipped", "dst", nr.Dst, "error", addErr)
+		}
+		// Remove the default route from the main table so only one default route
+		// exists (via the primary/management interface). Policy routing handles
+		// outgoing traffic from this interface's IP via the policy table.
+		if isDefault {
+			if delErr := netlink.RouteDel(&r); delErr != nil {
+				m.logger.Debug("main table default route already removed", "gw", r.Gw, "error", delErr)
+			} else {
+				m.logger.Info("removed default route from main table", "interface", name, "gw", r.Gw)
+			}
+		}
+	}
+
+	// Add rule: from <IP>/32 lookup tableID priority 100
+	rule := netlink.NewRule()
+	rule.Src = &net.IPNet{IP: srcIP, Mask: net.CIDRMask(32, 32)}
+	rule.Table = tableID
+	rule.Priority = 100
+	if err := netlink.RuleAdd(rule); err != nil && err != syscall.EEXIST {
+		return fmt.Errorf("rule add: %w", err)
+	}
+
+	m.logger.Info("policy routing configured", "interface", name, "src", srcIP, "table", tableID)
+	return nil
+}
+
+// teardownPolicyRouting removes the ip rules added by setupPolicyRouting.
+// The kernel cleans up routes when the interface goes away, but ip rules persist
+// and must be removed manually.
+func (m *Manager) teardownPolicyRouting(name string) {
+	tableID := policyTableID(name)
+	rules, err := netlink.RuleList(netlink.FAMILY_V4)
+	if err != nil {
+		m.logger.Debug("policy rule list failed", "error", err)
+		return
+	}
+	for _, r := range rules {
+		if r.Table == tableID {
+			if err := netlink.RuleDel(&r); err != nil {
+				m.logger.Debug("policy rule del failed", "error", err)
+			}
+		}
+	}
 }
