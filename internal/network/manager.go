@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/vishvananda/netlink"
-	"github.com/yesveer/openstack-network-manager/internal/config"
+	"github.com/yesveer/openstack-net-attach/internal/config"
 )
 
 // Manager handles network interface configuration for hot-plugged OpenStack NICs.
@@ -260,7 +260,7 @@ func (m *Manager) isNetworkdManaged(name string) bool {
 }
 
 func (m *Manager) networkdFile(name string) string {
-	return fmt.Sprintf("%s/99-openstack-network-manager-%s.network", m.cfg.NetworkdDir, name)
+	return fmt.Sprintf("%s/99-openstack-net-attach-%s.network", m.cfg.NetworkdDir, name)
 }
 
 // --- dhclient backend ---
@@ -333,11 +333,11 @@ func (m *Manager) isDHClientRunning(name string) bool {
 }
 
 func (m *Manager) dhclientPIDFile(iface string) string {
-	return fmt.Sprintf("/run/openstack-network-manager-dhclient-%s.pid", iface)
+	return fmt.Sprintf("/run/openstack-net-attach-dhclient-%s.pid", iface)
 }
 
 func (m *Manager) dhclientLeaseFile(iface string) string {
-	return fmt.Sprintf("/var/lib/dhcp/openstack-network-manager-%s.leases", iface)
+	return fmt.Sprintf("/var/lib/dhcp/openstack-net-attach-%s.leases", iface)
 }
 
 // --- helpers ---

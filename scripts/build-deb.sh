@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# build-deb.sh — assembles a production .deb package for openstack-network-manager
+# build-deb.sh — assembles a production .deb package for openstack-net-attach
 set -euo pipefail
 
 VERSION="${1:-1.0.0}"
 ARCH="amd64"
-PKG="openstack-network-manager"
+PKG="openstack-net-attach"
 BUILD_DIR="dist/deb-build"
 DEB_FILE="dist/${PKG}_${VERSION}_${ARCH}.deb"
 
@@ -14,13 +14,13 @@ rm -rf "${BUILD_DIR}"
 echo "--> Creating package layout"
 install -d "${BUILD_DIR}/DEBIAN"
 install -d "${BUILD_DIR}/usr/bin"
-install -d "${BUILD_DIR}/etc/openstack-network-manager"
+install -d "${BUILD_DIR}/etc/openstack-net-attach"
 install -d "${BUILD_DIR}/lib/systemd/system"
 
 echo "--> Copying files"
 install -m 0755 "dist/${PKG}"                                   "${BUILD_DIR}/usr/bin/${PKG}"
 install -m 0644 "systemd/${PKG}.service"                        "${BUILD_DIR}/lib/systemd/system/${PKG}.service"
-install -m 0644 "config/config.yaml.default"                    "${BUILD_DIR}/etc/openstack-network-manager/config.yaml"
+install -m 0644 "config/config.yaml.default"                    "${BUILD_DIR}/etc/openstack-net-attach/config.yaml"
 
 echo "--> Copying DEBIAN control files"
 install -m 0644 packaging/DEBIAN/control                        "${BUILD_DIR}/DEBIAN/control"
@@ -46,5 +46,5 @@ echo "Install on target Ubuntu machine:"
 echo "  sudo dpkg -i ${DEB_FILE}"
 echo ""
 echo "Verify service:"
-echo "  sudo systemctl status openstack-network-manager"
-echo "  sudo journalctl -u openstack-network-manager -f"
+echo "  sudo systemctl status openstack-net-attach"
+echo "  sudo journalctl -u openstack-net-attach -f"

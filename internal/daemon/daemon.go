@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/vishvananda/netlink"
-	"github.com/yesveer/openstack-network-manager/internal/network"
+	"github.com/yesveer/openstack-net-attach/internal/network"
 )
 
 // Daemon monitors netlink events and configures network interfaces as they are

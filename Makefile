@@ -1,4 +1,4 @@
-BINARY     := openstack-network-manager
+BINARY     := openstack-net-attach
 VERSION    ?= 1.0.0
 GOOS       := linux
 GOARCH     := amd64

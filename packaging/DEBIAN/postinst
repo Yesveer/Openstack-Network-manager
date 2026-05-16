@@ -4,9 +4,9 @@ set -e
 case "$1" in
     configure)
         systemctl daemon-reload
-        systemctl enable openstack-network-manager.service
+        systemctl enable openstack-net-attach.service
         # Start the service but don't fail the install if it can't start right now.
-        systemctl start openstack-network-manager.service || true
+        systemctl start openstack-net-attach.service || true
         ;;
     abort-upgrade|abort-remove|abort-deconfigure)
         ;;

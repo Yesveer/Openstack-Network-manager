@@ -8,22 +8,22 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/yesveer/openstack-network-manager/internal/config"
-	"github.com/yesveer/openstack-network-manager/internal/daemon"
-	"github.com/yesveer/openstack-network-manager/internal/network"
+	"github.com/yesveer/openstack-net-attach/internal/config"
+	"github.com/yesveer/openstack-net-attach/internal/daemon"
+	"github.com/yesveer/openstack-net-attach/internal/network"
 )
 
 // version is injected at build time via -ldflags.
 var version = "dev"
 
 func main() {
-	configPath := flag.String("config", "/etc/openstack-network-manager/config.yaml", "path to config file")
+	configPath := flag.String("config", "/etc/openstack-net-attach/config.yaml", "path to config file")
 	logLevel := flag.String("log-level", "info", "log level: debug, info, warn, error")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 
 	if *showVersion {
-		os.Stdout.WriteString("openstack-network-manager " + version + "\n")
+		os.Stdout.WriteString("openstack-net-attach " + version + "\n")
 		return
 	}
 
@@ -37,7 +37,7 @@ func main() {
 	}))
 	slog.SetDefault(logger)
 
-	logger.Info("openstack-network-manager starting", "version", version)
+	logger.Info("openstack-net-attach starting", "version", version)
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
@@ -70,5 +70,5 @@ func main() {
 		os.Exit(1)
 	}
 
-	logger.Info("openstack-network-manager stopped")
+	logger.Info("openstack-net-attach stopped")
 }

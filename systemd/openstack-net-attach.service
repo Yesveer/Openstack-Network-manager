@@ -1,12 +1,12 @@
 [Unit]
 Description=OpenStack Network Hot-plug Manager
-Documentation=https://github.com/yesveer/openstack-network-manager
+Documentation=https://github.com/yesveer/openstack-net-attach
 After=network.target systemd-networkd.service
 Wants=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/openstack-network-manager
+ExecStart=/usr/bin/openstack-net-attach
 Restart=on-failure
 RestartSec=5s
 TimeoutStartSec=10s
@@ -15,7 +15,7 @@ TimeoutStopSec=15s
 # Logging
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=openstack-network-manager
+SyslogIdentifier=openstack-net-attach
 
 # Runs as root — required for netlink socket, networkctl, and dhclient
 User=root

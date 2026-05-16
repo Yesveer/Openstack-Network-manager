@@ -1,4 +1,4 @@
-Package: openstack-network-manager
+Package: openstack-net-attach
 Version: 1.0.0
 Section: net
 Priority: optional

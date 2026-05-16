@@ -1,4 +1,4 @@
-module github.com/yesveer/openstack-network-manager
+module github.com/yesveer/openstack-net-attach
 
 go 1.21
 
