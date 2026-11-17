@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -176,6 +177,10 @@ func (m *Manager) ReleaseInterface(ctx context.Context, name string) {
 // their IP (e.g. after a daemon restart). Interfaces not tracked by a prior run
 // are skipped so manually-configured or third-party interfaces are never touched.
 func (m *Manager) ConfigureExisting(ctx context.Context) {
+	if m.cfg.Backend == config.BackendNetworkd {
+		m.migrateLegacyNetworkdFiles(ctx)
+	}
+
 	links, err := netlink.LinkList()
 	if err != nil {
 		m.logger.Error("failed to list interfaces", "error", err)
@@ -198,7 +203,76 @@ func (m *Manager) ConfigureExisting(ctx context.Context) {
 			continue
 		}
 		m.logger.Info("found previously-managed unconfigured interface at startup", "interface", name)
+		if m.cfg.Backend == config.BackendNetworkd {
+			// The .network file exists (so ConfigureInterface would skip it) but
+			// the interface has no IP — ask networkd to (re)apply the config.
+			go m.reconfigureViaNetworkd(ctx, name)
+			continue
+		}
 		go m.ConfigureInterface(ctx, name)
+	}
+}
+
+// migrateLegacyNetworkdFiles moves .network files written by older versions to
+// the tmpfs directory /run/systemd/network into the persistent NetworkdDir, so
+// that hot-plugged interfaces keep their IP across reboots.
+func (m *Manager) migrateLegacyNetworkdFiles(ctx context.Context) {
+	if strings.HasPrefix(filepath.Clean(m.cfg.NetworkdDir)+"/", "/run/") {
+		m.logger.Warn("networkd_dir is on tmpfs; interface configuration will be lost on reboot",
+			"networkd_dir", m.cfg.NetworkdDir, "recommended", config.DefaultNetworkdDir)
+		return
+	}
+
+	matches, err := filepath.Glob(filepath.Join(config.LegacyNetworkdDir, "99-openstack-net-attach-*.network"))
+	if err != nil || len(matches) == 0 {
+		return
+	}
+
+	if err := os.MkdirAll(m.cfg.NetworkdDir, 0755); err != nil {
+		m.logger.Warn("cannot create networkd dir for migration", "dir", m.cfg.NetworkdDir, "error", err)
+		return
+	}
+
+	migrated := 0
+	for _, src := range matches {
+		data, err := os.ReadFile(src)
+		if err != nil {
+			m.logger.Warn("failed to read legacy networkd file", "file", src, "error", err)
+			continue
+		}
+		dst := filepath.Join(m.cfg.NetworkdDir, filepath.Base(src))
+		if err := os.WriteFile(dst, data, 0644); err != nil {
+			m.logger.Warn("failed to write networkd file", "file", dst, "error", err)
+			continue
+		}
+		_ = os.Remove(src)
+		migrated++
+		m.logger.Info("migrated networkd file to persistent dir", "from", src, "to", dst)
+	}
+
+	if migrated > 0 {
+		m.networkctl(ctx, "reload")
+	}
+}
+
+// reconfigureViaNetworkd brings the interface up and asks networkd to re-apply
+// its .network file. Used at startup for managed interfaces that have no IP.
+func (m *Manager) reconfigureViaNetworkd(ctx context.Context, name string) {
+	if err := m.bringUp(name); err != nil {
+		m.logger.Warn("failed to set interface up", "interface", name, "error", err)
+	}
+	m.networkctl(ctx, "reload")
+	m.networkctl(ctx, "reconfigure", name)
+	if err := m.waitAndSetupPolicyRouting(ctx, name); err != nil {
+		m.logger.Warn("interface did not get an IP after reconfigure", "interface", name, "error", err)
+	}
+}
+
+func (m *Manager) networkctl(ctx context.Context, args ...string) {
+	cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	if out, err := exec.CommandContext(cctx, "networkctl", args...).CombinedOutput(); err != nil {
+		m.logger.Warn("networkctl failed", "args", args, "error", err, "output", strings.TrimSpace(string(out)))
 	}
 }
 
@@ -260,7 +334,7 @@ func (m *Manager) isNetworkdManaged(name string) bool {
 }
 
 func (m *Manager) networkdFile(name string) string {
-	return fmt.Sprintf("%s/99-openstack-net-attach-%s.network", m.cfg.NetworkdDir, name)
+	return filepath.Join(m.cfg.NetworkdDir, fmt.Sprintf("99-openstack-net-attach-%s.network", name))
 }
 
 // --- dhclient backend ---

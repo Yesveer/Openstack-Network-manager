@@ -43,5 +43,7 @@ retry_delay: 5
 # Increase if your hypervisor is slow to attach the virtual cable.
 carrier_timeout: 30
 
-# networkd_dir: directory for systemd-networkd runtime .network files (networkd backend only)
-networkd_dir: /run/systemd/network
+# networkd_dir: directory for systemd-networkd .network files (networkd backend only).
+# Must be persistent: /run is tmpfs and is wiped on reboot, which makes the
+# hot-plugged interface lose its IP after a reboot.
+networkd_dir: /etc/systemd/network

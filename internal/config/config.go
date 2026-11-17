@@ -12,6 +12,13 @@ import (
 // "dhclient" invokes dhclient directly.
 type Backend string
 
+// DefaultNetworkdDir is persistent across reboots.
+const DefaultNetworkdDir = "/etc/systemd/network"
+
+// LegacyNetworkdDir was used by versions <= 1.1.3. It lives on tmpfs, so files
+// written there are lost on reboot (interface stays, IP disappears).
+const LegacyNetworkdDir = "/run/systemd/network"
+
 const (
 	BackendNetworkd Backend = "networkd"
 	BackendDHClient Backend = "dhclient"
@@ -39,7 +46,9 @@ type Config struct {
 	// CarrierTimeout is the maximum seconds to wait for link carrier before starting DHCP
 	CarrierTimeout int `yaml:"carrier_timeout"`
 
-	// NetworkdDir is the directory where systemd-networkd .network files are written
+	// NetworkdDir is the directory where systemd-networkd .network files are written.
+	// Must be a persistent directory (e.g. /etc/systemd/network) so that the
+	// configuration survives a reboot; /run is tmpfs and is wiped on boot.
 	NetworkdDir string `yaml:"networkd_dir"`
 }
 
@@ -52,7 +61,7 @@ func Default() *Config {
 		MaxRetries:      5,
 		RetryDelay:      5,
 		CarrierTimeout:  30,
-		NetworkdDir:     "/run/systemd/network",
+		NetworkdDir:     DefaultNetworkdDir,
 	}
 }
 

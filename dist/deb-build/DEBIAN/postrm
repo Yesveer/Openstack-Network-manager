@@ -14,6 +14,8 @@ case "$1" in
         fi
         rm -rf /etc/openstack-net-attach
         rm -f /run/systemd/network/99-openstack-net-attach-*.network
+        rm -f /etc/systemd/network/99-openstack-net-attach-*.network
+        networkctl reload 2>/dev/null || true
         rm -f /run/openstack-net-attach-dhclient-*.pid
         systemctl daemon-reload
         ;;

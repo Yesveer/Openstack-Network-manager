@@ -1,5 +1,5 @@
 Package: openstack-net-attach
-Version: 1.1.3
+Version: 1.1.4
 Section: net
 Priority: optional
 Architecture: amd64
@@ -17,4 +17,4 @@ Description: OpenStack Network Hot-plug Manager for Ubuntu
  .
  Supports systemd-networkd (default) and dhclient backends.
  Installs as a systemd service that starts automatically on boot.
-Installed-Size: 3520
+Installed-Size: 3108
