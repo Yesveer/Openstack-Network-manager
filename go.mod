@@ -1,6 +1,8 @@
 module github.com/yesveer/openstack-net-attach
 
-go 1.21
+go 1.26.0
+
+toolchain go1.26.11
 
 require (
 	github.com/vishvananda/netlink v1.2.1
@@ -9,5 +11,5 @@ require (
 
 require (
 	github.com/vishvananda/netns v0.0.4 // indirect
-	golang.org/x/sys v0.10.0 // indirect
+	golang.org/x/sys v0.50.0 // indirect
 )

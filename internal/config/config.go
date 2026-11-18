@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
@@ -68,7 +69,9 @@ func Default() *Config {
 func Load(path string) (*Config, error) {
 	cfg := Default()
 
-	data, err := os.ReadFile(path)
+	// The path comes from the -config flag, set by the administrator who starts
+	// this root daemon; reading an operator-chosen file is the intended behaviour.
+	data, err := os.ReadFile(filepath.Clean(path)) // #nosec G304 -- operator-supplied config path
 	if err != nil {
 		if os.IsNotExist(err) {
 			return cfg, nil

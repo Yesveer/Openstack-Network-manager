@@ -104,6 +104,6 @@ func (d *Daemon) handleUpdate(ctx context.Context, update netlink.LinkUpdate) {
 
 	case syscall.RTM_DELLINK:
 		d.logger.Info("interface hot-unplugged", "interface", name)
-		go d.manager.ReleaseInterface(ctx, name)
+		go d.manager.ReleaseInterface(ctx, name, update.Link.Attrs().HardwareAddr)
 	}
 }

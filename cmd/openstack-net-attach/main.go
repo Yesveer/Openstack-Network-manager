@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -23,7 +24,7 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		os.Stdout.WriteString("openstack-net-attach " + version + "\n")
+		fmt.Println("openstack-net-attach " + version)
 		return
 	}
 
